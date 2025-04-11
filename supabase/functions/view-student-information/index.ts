@@ -1,10 +1,29 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import SupabaseClient from "../_shared/supabaseClient.ts";
+import {corsHeaders} from "../_shared/cors.ts";
+/**
+ * HTTP handler for retrieving student data (and their lesson progress) for a specific teacher.
+ *
+ * This endpoint:
+ * - Handles CORS preflight requests (`OPTIONS`).
+ * - Authenticates the request via a Bearer token from the `Authorization` header.
+ * - Accepts a `student_id` query parameter to specify which student to look up.
+ * - Verifies the authenticated user is the teacher assigned to the student.
+ * - Retrieves the student record and their associated lesson progress from the database.
+ * - Returns the full student object, including nested `lesson_progress`.
+ *
+ * @param {Request} req - Incoming HTTP request. Should include:
+ *   - `Authorization` header with a Supabase Bearer token.
+ *   - Query param `student_id` representing the student to retrieve.
+ *
+ * @returns {Promise<Response>} JSON response:
+ * - `200 OK` with the student object and lesson progress.
+ * - `401 Unauthorized` if authentication fails or user is missing.
+ * - `400+` for database or unexpected errors.
+ */
 Deno.serve(async (req)=>{
   if (req.method === 'OPTIONS') {
-    return new Response('ok', {
-      status: 200
-    });
+    return new Response('ok', { headers: corsHeaders })
   }
   try {
     const supabaseClient = SupabaseClient(req)
@@ -20,7 +39,8 @@ Deno.serve(async (req)=>{
       return new Response(JSON.stringify({
         error: 'Unauthorized'
       }), {
-        status: 401
+        status: 401,
+        headers:corsHeaders
       });
     }
 
@@ -36,7 +56,8 @@ Deno.serve(async (req)=>{
     // return the student personal data
     return new Response(JSON.stringify(studentData), {
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        ...corsHeaders
       },
       status: 200
     });
@@ -46,7 +67,8 @@ Deno.serve(async (req)=>{
       error: error.message
     }), {
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        ...corsHeaders
       },
       status: error.status
     });

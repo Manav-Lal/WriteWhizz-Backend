@@ -1,10 +1,29 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import SupabaseClient from "../_shared/supabaseClient.ts";
+import {corsHeaders} from "../_shared/cors.ts";
 
 /**
- * This method returns all the assigned lessons for all students associated with a teacher.
+ * HTTP endpoint to retrieve a list of students and their assigned lessons for the authenticated teacher.
+ *
+ * This function:
+ * - Handles CORS preflight (`OPTIONS`) requests.
+ * - Authenticates the request using a Supabase Bearer token from the `Authorization` header.
+ * - Retrieves all students linked to the authenticated teacher (`teacher_id = user.id`).
+ * - For each student, includes any `student_assigned_lessons` with `id` and `lesson_id`.
+ * - Returns the result as a JSON array.
+ *
+ * @param {Request} req - Incoming HTTP request.
+ *   - Must include the `Authorization: Bearer <token>` header.
+ *
+ * @returns {Promise<Response>} JSON response:
+ * - `200 OK` with an array of student objects and their assigned lessons.
+ * - `401 Unauthorized` if authentication fails or user is not found.
+ * - `400 Bad Request` if the Supabase query fails.
  */
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
   const supabaseClient = SupabaseClient(req)
 
   // Retrieve calling user's auth and role for checking
@@ -14,7 +33,8 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       error: 'Unauthorized'
     }), {
-      status: 401
+      status: 401,
+      headers:corsHeaders
     });
   }
 
@@ -30,25 +50,16 @@ Deno.serve(async (req) => {
       error: profileError.message,
     }), {
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        ...corsHeaders
       },
       status: 400
     });
   }
   return new Response(
     JSON.stringify(profile_data),
-    { headers: { "Content-Type": "application/json" } },
+    { headers: { "Content-Type": "application/json",
+      ...corsHeaders} },
   )
 })
 
-/* To invoke locally:
-
-  1. Run `supabase start` (see: https://supabase.com/docs/reference/cli/supabase-start)
-  2. Make an HTTP request:
-
-  curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/view-all-students-assigned-lessons' \
-    --header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0' \
-    --header 'Content-Type: application/json' \
-    --data '{"name":"Functions"}'
-
-*/
